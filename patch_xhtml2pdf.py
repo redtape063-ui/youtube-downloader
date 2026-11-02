@@ -48,7 +48,50 @@ def apply_patch():
         rlp._justifyDrawParaLine = patched_justify
 
     except Exception as e:
-        print(f"Failed to apply xhtml2pdf patch: {e}")
+        print(f"Failed to apply xhtml2pdf paragraph patch: {e}")
+
+    # Also patch xhtml2pdf.tables.TableData.get_data and pisaTagTD.end
+    # so that colspan/rowspan across multiple columns in a single row work properly:
+    # 1. In pisaTagTD.end: `tdata.col` must advance by `cspan` (not just 1 via add_cell),
+    #    otherwise subsequent cells in the same row get wrong column indices!
+    # 2. In TableData.get_data: `self.span` must be sorted by `(y, x)` so that
+    #    `data[y].insert(x, "")` inserts empty placeholders from left to right!
+    try:
+        import xhtml2pdf.tables as xtables
+
+        orig_get_data = xtables.TableData.get_data
+
+        def patched_get_data(self):
+            self.span.sort(key=lambda pos: (pos[1], pos[0]))
+            return orig_get_data(self)
+
+        xtables.TableData.get_data = patched_get_data
+
+        orig_td_start = xtables.pisaTagTD.start
+        orig_td_end = xtables.pisaTagTD.end
+
+        def patched_td_start(self, c):
+            # Fix while loop in pisaTagTD.start so it skips all spanned columns, not just 1!
+            tdata = c.tableData
+            row = tdata.row
+            col = tdata.col
+            span_set = set(tdata.span)
+            while (col, row) in span_set:
+                col += 1
+                tdata.col += 1
+            return orig_td_start(self, c)
+
+        def patched_td_end(self, c):
+            orig_td_end(self, c)
+            cspan = self.attr.colspan
+            if cspan and cspan > 1:
+                c.tableData.col += (cspan - 1)
+
+        xtables.pisaTagTD.start = patched_td_start
+        xtables.pisaTagTD.end = patched_td_end
+
+    except Exception as e:
+        print(f"Failed to apply xhtml2pdf tables patch: {e}")
 
 # Apply immediately upon import
 apply_patch()

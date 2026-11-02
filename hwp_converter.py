@@ -85,6 +85,9 @@ def convert_hwp_via_html(hwp_file, output_pdf_file):
             # Remove font-family overrides from styles.css so our Korean font applies cleanly
             external_css = re.sub(r'font-family:[^;]+;', '', external_css)
 
+        # Remove external stylesheet link tag to avoid pisa warning
+        html = re.sub(r'<link[^>]*href=[\"\']styles\.css[\"\'][^>]*/?>', '', html)
+
         # 1. Sanitize outer wrapper divs that break ReportLab flowable page-splitting:
         # e.g., <div class="Section Section-0 Paper">, <div class="HeaderPageFooter">, <div class="Page">
         cleaned = re.sub(r'<div\s+class=[\"\'](Section[^\"\']*|HeaderPageFooter|Page)[\"\']>', '', html)
@@ -96,29 +99,77 @@ def convert_hwp_via_html(hwp_file, output_pdf_file):
         cleaned = re.sub(r'position:\s*relative;?', '', cleaned)
         cleaned = re.sub(r'display:\s*inline-block;?', 'display: block;', cleaned)
 
+        # Convert table and td fixed mm widths into proportional percentage widths
+        # and strip fixed height on td (which in xhtml2pdf sets FONTSIZE/LEADING to 1.0!)
+        def _normalize_table(match):
+            tbl_html = match.group(0)
+            m_tw = re.search(r'<table[^>]*style="[^"]*width:\s*([\d.]+)mm', tbl_html)
+            tbl_w = float(m_tw.group(1)) if m_tw else 180.0
+            if tbl_w <= 0:
+                tbl_w = 180.0
+
+            def _fix_td(td_match):
+                td_tag = td_match.group(0)
+                # Remove fixed height on td so xhtml2pdf does not force FONTSIZE=1.0
+                td_tag = re.sub(r'height:\s*[\d.]+mm;?\s*', '', td_tag)
+                # Convert width: XXmm to proportional percentage
+                m_cw = re.search(r'width:\s*([\d.]+)mm;?', td_tag)
+                if m_cw:
+                    cw = float(m_cw.group(1))
+                    pct = max(2.5, min(100.0, (cw / tbl_w) * 100.0))
+                    td_tag = re.sub(r'width:\s*[\d.]+mm;?', f'width: {pct:.1f}%;', td_tag)
+                return td_tag
+
+            tbl_html = re.sub(r'<td[^>]*>', _fix_td, tbl_html)
+            tbl_html = re.sub(r'(<table[^>]*style="[^"]*)width:\s*[\d.]+mm;?', r'\1width: 100%;', tbl_html)
+            return tbl_html
+
+        cleaned = re.sub(r'<table[^>]*>.*?</table>', _normalize_table, cleaned, flags=re.S)
+
         # 3. Add clean page styles with proper Korean font support
         korean_style = f"""
         <style>
         @page {{
             size: A4 portrait;
-            margin: 15mm 15mm 15mm 15mm;
+            margin: 12mm 12mm 12mm 12mm;
         }}
         @font-face {{
             font-family: '{FONT_NAME}';
             src: url('{FONT_PATH}');
         }}
+        {external_css}
         body, p, div, span, table, td, th {{
             font-family: '{FONT_NAME}', sans-serif !important;
+            -pdf-word-wrap: CJK;
+        }}
+        body {{
+            background-color: #ffffff !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }}
+        .Paper {{
+            border: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
         }}
         table {{
             width: 100% !important;
             max-width: 100% !important;
             border-collapse: collapse;
+            -pdf-word-wrap: CJK;
         }}
         td, th {{
-            border: 0.5pt solid #718096;
-            padding: 3px;
+            border: 0.5pt solid #475569;
+            padding: 2px 2px;
+            vertical-align: middle;
             word-break: break-all;
+            -pdf-word-wrap: CJK;
+        }}
+        td p, th p {{
+            margin: 0 !important;
+            padding: 0 !important;
+            line-height: 1.25 !important;
+            -pdf-word-wrap: CJK;
         }}
         img {{
             max-width: 100%;
@@ -129,7 +180,6 @@ def convert_hwp_via_html(hwp_file, output_pdf_file):
             margin: 0 !important;
             padding: 0 !important;
         }}
-        {external_css}
         </style>
         """
         
