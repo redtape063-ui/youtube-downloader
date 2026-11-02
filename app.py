@@ -178,6 +178,11 @@ def get_video_info():
         'no_warnings': True,
         'skip_download': True,
         'extract_flat': False,
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android', 'ios', 'mweb', 'web']
+            }
+        }
     }
 
     try:
@@ -274,6 +279,11 @@ def run_download_task(task_id, url, format_type, quality):
         'quiet': True,
         'no_warnings': True,
         'windowsfilenames': True,
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android', 'ios', 'mweb', 'web']
+            }
+        }
     }
 
     if format_type == 'audio':
