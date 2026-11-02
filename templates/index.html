@@ -3,10 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>YouTube Downloader | 유튜브 영상 다운로더</title>
+  <title>스마트 유틸리티 툴박스 | 유튜브 다운로더 & 한글 PDF 변환기</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
   <style>
     :root {
       --bg: #0f1117;
@@ -15,11 +16,14 @@
       --accent: #ff2a2a;
       --accent-hover: #ff4747;
       --accent-glow: rgba(255, 42, 42, 0.35);
+      --blue-accent: #3b82f6;
+      --blue-hover: #2563eb;
+      --blue-glow: rgba(59, 130, 246, 0.35);
       --text: #f0f3f8;
       --text-muted: #8b949e;
       --input-bg: rgba(18, 22, 33, 0.9);
       --success: #10b981;
-      --radius: 14px;
+      --radius: 16px;
     }
 
     * {
@@ -33,62 +37,97 @@
       background-color: var(--bg);
       background-image: 
         radial-gradient(at 0% 0%, rgba(255, 42, 42, 0.12) 0px, transparent 50%),
-        radial-gradient(at 100% 100%, rgba(59, 130, 246, 0.08) 0px, transparent 50%);
+        radial-gradient(at 100% 100%, rgba(59, 130, 246, 0.12) 0px, transparent 50%);
       color: var(--text);
       min-height: 100vh;
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 40px 20px;
+      padding: 24px 16px 40px;
+    }
+
+    /* Top Navigation Header */
+    nav.top-nav {
+      width: 100%;
+      max-width: 760px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      padding: 12px 18px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius);
+      backdrop-filter: blur(16px);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 17px;
+    }
+
+    .brand-icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #3b82f6, #ec4899);
+      border-radius: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 15px;
+    }
+
+    .menu-tabs {
+      display: flex;
+      gap: 6px;
+      background: var(--input-bg);
+      padding: 4px;
+      border-radius: 12px;
+      border: 1px solid var(--card-border);
+    }
+
+    .menu-tab {
+      padding: 8px 16px;
+      font-size: 13.5px;
+      font-weight: 600;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      border-radius: 9px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      transition: all 0.2s ease;
+    }
+
+    .menu-tab:hover {
+      color: var(--text);
+    }
+
+    .menu-tab.active-yt {
+      background: var(--accent);
+      color: white;
+      box-shadow: 0 4px 14px var(--accent-glow);
+    }
+
+    .menu-tab.active-hwp {
+      background: var(--blue-accent);
+      color: white;
+      box-shadow: 0 4px 14px var(--blue-glow);
     }
 
     .container {
       width: 100%;
-      max-width: 680px;
+      max-width: 760px;
       display: flex;
       flex-direction: column;
       gap: 20px;
-    }
-
-    header {
-      text-align: center;
-      margin-bottom: 8px;
-    }
-
-    .logo {
-      display: inline-flex;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 8px;
-    }
-
-    .logo-icon {
-      width: 44px;
-      height: 44px;
-      background: linear-gradient(135deg, #ff0000, #ff4d4d);
-      border-radius: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 8px 24px var(--accent-glow);
-    }
-
-    .logo-icon svg {
-      width: 24px;
-      height: 24px;
-      fill: #fff;
-    }
-
-    h1 {
-      font-size: 26px;
-      font-weight: 700;
-      letter-spacing: -0.5px;
-    }
-
-    p.subtitle {
-      color: var(--text-muted);
-      font-size: 14.5px;
-      margin-top: 4px;
     }
 
     .card {
@@ -101,6 +140,46 @@
       transition: all 0.3s ease;
     }
 
+    /* Tab Contents */
+    .tab-content {
+      display: none;
+      animation: fadeIn 0.25s ease forwards;
+    }
+
+    .tab-content.active {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Titles */
+    .section-header {
+      text-align: center;
+      margin-bottom: 6px;
+    }
+
+    .section-header h2 {
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .section-header p {
+      color: var(--text-muted);
+      font-size: 14px;
+      margin-top: 4px;
+    }
+
+    /* Common Input / Buttons */
     .input-group {
       display: flex;
       gap: 10px;
@@ -172,24 +251,10 @@
       background: var(--accent-hover);
     }
 
-    .btn-search:active {
-      transform: scale(0.98);
-    }
-
-    .btn-search:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-
-    /* Video Details Card */
+    /* Video Details */
     #videoCard {
       display: none;
       animation: fadeIn 0.3s ease forwards;
-    }
-
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
     }
 
     .video-preview {
@@ -255,15 +320,6 @@
       margin: 18px 0;
     }
 
-    .format-section h3 {
-      font-size: 13.5px;
-      font-weight: 600;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-bottom: 12px;
-    }
-
     .type-tabs {
       display: flex;
       gap: 8px;
@@ -308,7 +364,6 @@
       font-size: 13.5px;
       font-weight: 500;
       cursor: pointer;
-      transition: all 0.15s ease;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -378,11 +433,7 @@
       box-shadow: 0 10px 30px rgba(255, 42, 42, 0.5);
     }
 
-    .btn-download:active {
-      transform: scale(0.99);
-    }
-
-    /* Progress Modal / Box */
+    /* Progress Box */
     #progressBox {
       display: none;
       margin-top: 18px;
@@ -424,7 +475,176 @@
       font-size: 12px;
     }
 
-    /* Alert / Error message */
+    /* ======================================= */
+    /* HWP to PDF Styles                       */
+    /* ======================================= */
+    .drop-zone {
+      border: 2px dashed rgba(255, 255, 255, 0.15);
+      border-radius: 16px;
+      padding: 48px 24px;
+      text-align: center;
+      cursor: pointer;
+      background: rgba(255, 255, 255, 0.02);
+      transition: all 0.2s ease;
+    }
+
+    .drop-zone:hover, .drop-zone.dragover {
+      border-color: var(--blue-accent);
+      background: rgba(59, 130, 246, 0.06);
+    }
+
+    .drop-icon {
+      width: 64px;
+      height: 64px;
+      background: rgba(59, 130, 246, 0.12);
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 16px;
+      color: var(--blue-accent);
+      font-size: 28px;
+    }
+
+    .sample-download {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 14px;
+      font-size: 12.5px;
+      color: #93c5fd;
+      text-decoration: none;
+      padding: 6px 12px;
+      border-radius: 8px;
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.2);
+    }
+
+    .sample-download:hover {
+      background: rgba(59, 130, 246, 0.18);
+    }
+
+    /* File List & Items */
+    .file-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .file-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 18px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 12px;
+    }
+
+    .file-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      overflow: hidden;
+    }
+
+    .file-icon {
+      font-size: 24px;
+      color: #60a5fa;
+    }
+
+    .file-name {
+      font-size: 14px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 320px;
+    }
+
+    .file-size {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .btn-action {
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      text-decoration: none;
+    }
+
+    .btn-blue {
+      background: var(--blue-accent);
+      color: white;
+    }
+
+    .btn-blue:hover {
+      background: var(--blue-hover);
+    }
+
+    .btn-preview {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text);
+    }
+
+    .btn-preview:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    /* Modal for PDF Preview */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(8px);
+      z-index: 999;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .modal-content {
+      background: #1e2330;
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      width: 100%;
+      max-width: 900px;
+      height: 85vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .modal-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--card-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .modal-body {
+      flex: 1;
+      width: 100%;
+      height: 100%;
+    }
+
+    .modal-body iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    /* Alerts */
     .alert {
       display: none;
       padding: 14px 18px;
@@ -439,38 +659,6 @@
       color: #fca5a5;
     }
 
-    /* Features List */
-    .features-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 12px;
-    }
-
-    .feature-item {
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid rgba(255, 255, 255, 0.05);
-      border-radius: 12px;
-      padding: 16px;
-      text-align: center;
-    }
-
-    .feature-icon {
-      font-size: 22px;
-      margin-bottom: 6px;
-    }
-
-    .feature-title {
-      font-size: 13.5px;
-      font-weight: 600;
-      margin-bottom: 2px;
-    }
-
-    .feature-desc {
-      font-size: 12px;
-      color: var(--text-muted);
-    }
-
-    /* Spinner */
     .spinner {
       width: 18px;
       height: 18px;
@@ -493,127 +681,208 @@
         width: 100%;
         height: 180px;
       }
-      .features-grid {
-        grid-template-columns: 1fr;
+      .file-name {
+        max-width: 160px;
       }
     }
   </style>
 </head>
 <body>
 
-  <div class="container">
-    <header>
-      <div class="logo">
-        <div class="logo-icon">
-          <svg viewBox="0 0 24 24">
-            <path d="M19.615 3.184c-3.604-.246-11.631-.245-15.23 0-3.897.266-4.356 2.62-4.385 8.816.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23 0 3.897-.266 4.356-2.62 4.385-8.816-.029-6.185-.484-8.549-4.385-8.816zm-10.615 12.816v-8l8 3.993-8 4.007z"/>
-          </svg>
-        </div>
-        <h1>YouTube Downloader</h1>
+  <!-- Top Global Navigation Bar -->
+  <nav class="top-nav">
+    <div class="brand">
+      <div class="brand-icon">
+        <i class="fa-solid fa-shapes"></i>
       </div>
-      <p class="subtitle">모든 플레이어에서 바로 열리는 표준 H.264 MP4 & 고음질 MP3 추출기</p>
-    </header>
+      <span>Smart Toolbox</span>
+    </div>
 
-    <!-- Search / URL Card -->
-    <div class="card">
-      <div class="input-group">
-        <div class="input-wrapper">
-          <input type="text" id="urlInput" placeholder="https://www.youtube.com/watch?v=... 링크 붙여넣기" autocomplete="off">
-          <button class="paste-btn" id="pasteBtn" title="클립보드 붙여넣기">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
-              <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
-            </svg>
+    <!-- Switcher Tabs -->
+    <div class="menu-tabs">
+      <button class="menu-tab active-yt" id="tabYtBtn" onclick="switchMainTab('yt')">
+        <i class="fa-brands fa-youtube"></i>
+        <span>유튜브 다운로더</span>
+      </button>
+      <button class="menu-tab" id="tabHwpBtn" onclick="switchMainTab('hwp')">
+        <i class="fa-solid fa-file-pdf"></i>
+        <span>한글 PDF 변환기</span>
+      </button>
+    </div>
+  </nav>
+
+  <div class="container">
+
+    <!-- ======================================================== -->
+    <!-- SECTION 1: 유튜브 영상 & MP3 다운로더                      -->
+    <!-- ======================================================== -->
+    <div id="ytSection" class="tab-content active">
+      <div class="section-header">
+        <h2><i class="fa-brands fa-youtube" style="color: #ff2a2a;"></i> 유튜브 영상 & 음원 추출기</h2>
+        <p>코덱 오류 없는 100% 호환 H.264 MP4 동영상 및 192kbps 고음질 MP3 다운로드</p>
+      </div>
+
+      <div class="card">
+        <div class="input-group">
+          <div class="input-wrapper">
+            <input type="text" id="urlInput" placeholder="https://www.youtube.com/watch?v=... 링크 붙여넣기" autocomplete="off">
+            <button class="paste-btn" id="pasteBtn" title="클립보드 붙여넣기">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path>
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+              </svg>
+            </button>
+          </div>
+          <button class="btn-search" id="searchBtn">
+            <span>가져오기</span>
           </button>
         </div>
-        <button class="btn-search" id="searchBtn">
-          <span>가져오기</span>
-        </button>
+
+        <div class="alert alert-error" id="errorAlert" style="margin-top: 14px;"></div>
       </div>
 
-      <div class="alert alert-error" id="errorAlert" style="margin-top: 14px;"></div>
-    </div>
-
-    <!-- Video Preview & Option Card -->
-    <div class="card" id="videoCard">
-      <div class="video-preview">
-        <div class="thumb-wrapper">
-          <img id="videoThumb" src="" alt="Thumbnail">
-          <span class="duration-badge" id="videoDuration">00:00</span>
-        </div>
-        <div class="video-meta">
-          <div class="video-title" id="videoTitle">영상 제목</div>
-          <div class="video-sub" id="videoSub">채널명 • 조회수</div>
-        </div>
-      </div>
-
-      <div class="divider"></div>
-
-      <div class="format-section">
-        <h3>다운로드 옵션 선택</h3>
-        
-        <div class="type-tabs">
-          <button class="type-tab active" data-type="video">🎬 동영상 (MP4)</button>
-          <button class="type-tab" data-type="audio">🎵 음원 추출 (MP3)</button>
-        </div>
-
-        <div class="quality-options" id="qualityOptions">
-          <!-- Dynamically populated -->
-        </div>
-
-        <div class="codec-notice" id="codecNotice">
-          <span>✅</span>
-          <span><strong>100% 호환 보장</strong>: 기본 플레이어(윈도우 미디어 플레이어, 맥 QuickTime, 스마트폰, 영상 편집기 등)에서 코덱 오류 없이 바로 열리도록 표준 <strong>H.264 + AAC</strong> 코덱으로 저장됩니다.</span>
-        </div>
-
-        <button class="btn-download" id="downloadBtn">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-            <polyline points="7 10 12 15 17 10"></polyline>
-            <line x1="12" y1="15" x2="12" y2="3"></line>
-          </svg>
-          <span id="downloadBtnText">다운로드 시작</span>
-        </button>
-
-        <!-- Progress Box -->
-        <div id="progressBox">
-          <div class="progress-header">
-            <span id="progressStatus">서버에서 영상 처리 중...</span>
-            <strong id="progressPercent">0%</strong>
+      <!-- Video Preview Card -->
+      <div class="card" id="videoCard">
+        <div class="video-preview">
+          <div class="thumb-wrapper">
+            <img id="videoThumb" src="" alt="Thumbnail">
+            <span class="duration-badge" id="videoDuration">00:00</span>
           </div>
-          <div class="progress-bar-bg">
-            <div class="progress-bar-fill" id="progressBar"></div>
+          <div class="video-meta">
+            <div class="video-title" id="videoTitle">영상 제목</div>
+            <div class="video-sub" id="videoSub">채널명 • 조회수</div>
           </div>
-          <div class="progress-footer">
-            <span id="progressSpeed">0 KB/s</span>
-            <span id="progressEta">준비 중...</span>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="format-section">
+          <div class="type-tabs">
+            <button class="type-tab active" data-type="video">🎬 동영상 (MP4)</button>
+            <button class="type-tab" data-type="audio">🎵 음원 추출 (MP3)</button>
+          </div>
+
+          <div class="quality-options" id="qualityOptions"></div>
+
+          <div class="codec-notice" id="codecNotice">
+            <span>✅</span>
+            <span><strong>100% 호환 보장</strong>: 윈도우 미디어 플레이어, 맥 QuickTime, 스마트폰, 영상 편집기 등에서 코덱 오류 없이 바로 열리도록 표준 <strong>H.264 + AAC</strong> 코덱으로 자동 저장됩니다.</span>
+          </div>
+
+          <button class="btn-download" id="downloadBtn">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            <span id="downloadBtnText">다운로드 시작</span>
+          </button>
+
+          <!-- Progress Box -->
+          <div id="progressBox">
+            <div class="progress-header">
+              <span id="progressStatus">서버에서 영상 처리 중...</span>
+              <strong id="progressPercent">0%</strong>
+            </div>
+            <div class="progress-bar-bg">
+              <div class="progress-bar-fill" id="progressBar"></div>
+            </div>
+            <div class="progress-footer">
+              <span id="progressSpeed">0 KB/s</span>
+              <span id="progressEta">준비 중...</span>
+            </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Feature Highlights -->
-    <div class="features-grid">
-      <div class="feature-item">
-        <div class="feature-icon">🎞️</div>
-        <div class="feature-title">완벽 코덱 호환</div>
-        <div class="feature-desc">H.264 & AAC 표준 코덱</div>
+    <!-- ======================================================== -->
+    <!-- SECTION 2: 한글(HWP / HWPX) -> PDF 변환기                 -->
+    <!-- ======================================================== -->
+    <div id="hwpSection" class="tab-content">
+      <div class="section-header">
+        <h2><i class="fa-solid fa-file-pdf" style="color: #3b82f6;"></i> 한글(HWP/HWPX) ➔ PDF 변환기</h2>
+        <p>표 서식과 글꼴 스타일을 유지하여 고품질 표준 PDF 문서로 일괄 변환합니다</p>
       </div>
-      <div class="feature-item">
-        <div class="feature-icon">⚡️</div>
-        <div class="feature-title">초고속 다운로드</div>
-        <div class="feature-desc">실시간 진행률 & 속도 표시</div>
-      </div>
-      <div class="feature-item">
-        <div class="feature-icon">🎧</div>
-        <div class="feature-title">고음질 MP3</div>
-        <div class="feature-desc">192kbps 깨끗한 오디오 추출</div>
+
+      <div class="card">
+        <div class="drop-zone" id="dropZone">
+          <input type="file" id="hwpFileInput" multiple accept=".hwp,.hwpx" style="display: none;">
+          <div class="drop-icon">
+            <i class="fa-solid fa-cloud-arrow-up"></i>
+          </div>
+          <h3 style="font-size: 17px; font-weight: 700; margin-bottom: 6px;">한글 문서 파일을 여기에 드래그하거나 클릭하세요</h3>
+          <p style="font-size: 13px; color: var(--text-muted);">.hwp 및 .hwpx 파일 일괄 변환 지원 (최대 50MB)</p>
+          
+          <div>
+            <a href="/api/sample" class="sample-download" onclick="event.stopPropagation();">
+              <i class="fa-solid fa-download"></i>
+              <span>테스트용 샘플 HWPX 문서 받기</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- HWP Alert -->
+        <div class="alert alert-error" id="hwpErrorAlert" style="margin-top: 14px;"></div>
+
+        <!-- Conversion Progress / Results -->
+        <div id="hwpResults" style="display: none; margin-top: 20px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h4 style="font-size: 15px; font-weight: 700;">변환된 문서 목록</h4>
+            <button class="btn-action btn-blue" id="btnDownloadAll" style="display: none;" onclick="downloadAllPdfs()">
+              <i class="fa-solid fa-file-zipper"></i>
+              <span>전체 압축(ZIP) 다운로드</span>
+            </button>
+          </div>
+
+          <div class="file-list" id="fileList"></div>
+        </div>
       </div>
     </div>
 
   </div>
 
+  <!-- PDF Preview Modal -->
+  <div class="modal-overlay" id="previewModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 style="font-size: 15px; font-weight: 700;" id="modalTitle">PDF 미리보기</h3>
+        <button onclick="closeModal()" style="background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer;">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <iframe id="previewFrame" src=""></iframe>
+      </div>
+    </div>
+  </div>
+
   <script>
+    // ==========================================
+    // Tab Switching
+    // ==========================================
+    function switchMainTab(tab) {
+      const tabYtBtn = document.getElementById('tabYtBtn');
+      const tabHwpBtn = document.getElementById('tabHwpBtn');
+      const ytSection = document.getElementById('ytSection');
+      const hwpSection = document.getElementById('hwpSection');
+
+      if (tab === 'yt') {
+        tabYtBtn.className = 'menu-tab active-yt';
+        tabHwpBtn.className = 'menu-tab';
+        ytSection.className = 'tab-content active';
+        hwpSection.className = 'tab-content';
+      } else {
+        tabYtBtn.className = 'menu-tab';
+        tabHwpBtn.className = 'menu-tab active-hwp';
+        ytSection.className = 'tab-content';
+        hwpSection.className = 'tab-content active';
+      }
+    }
+
+    // ==========================================
+    // 1. YouTube Downloader Logic
+    // ==========================================
     const urlInput = document.getElementById('urlInput');
     const pasteBtn = document.getElementById('pasteBtn');
     const searchBtn = document.getElementById('searchBtn');
@@ -640,7 +909,6 @@
     let selectedQuality = 1080;
     let isPolling = false;
 
-    // Paste button
     pasteBtn.addEventListener('click', async () => {
       try {
         const text = await navigator.clipboard.readText();
@@ -654,9 +922,7 @@
     });
 
     urlInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        fetchVideoInfo();
-      }
+      if (e.key === 'Enter') fetchVideoInfo();
     });
 
     searchBtn.addEventListener('click', fetchVideoInfo);
@@ -689,10 +955,7 @@
           body: JSON.stringify({ url })
         });
         const data = await res.json();
-
-        if (!res.ok) {
-          throw new Error(data.error || '영상 정보를 불러오는데 실패했습니다.');
-        }
+        if (!res.ok) throw new Error(data.error || '영상 정보를 불러오는데 실패했습니다.');
 
         currentVideoData = data;
         renderVideoData(data);
@@ -733,7 +996,6 @@
         const btn = document.createElement('button');
         btn.className = 'quality-btn active';
         btn.innerHTML = '<span>MP3 음원</span><span class="badge">192kbps 고음질</span>';
-        btn.onclick = () => {};
         qualityOptions.appendChild(btn);
         selectedQuality = 'audio';
       } else {
@@ -744,7 +1006,6 @@
           { height: 480, label: '480p', badge: '' }
         ];
 
-        // Prefer 1080p as initial selected
         let defaultIndex = resolutions.findIndex(r => r.height === 1080);
         if (defaultIndex === -1) defaultIndex = 0;
 
@@ -752,7 +1013,6 @@
           const btn = document.createElement('button');
           const isSelected = (index === defaultIndex);
           btn.className = `quality-btn ${isSelected ? 'active' : ''}`;
-          
           let badgeHtml = res.badge ? `<span class="badge">${res.badge}</span>` : '';
           btn.innerHTML = `<span>${res.label}</span>${badgeHtml}`;
           
@@ -830,7 +1090,6 @@
             progressStatus.textContent = '완료! 브라우저 다운로드가 시작됩니다.';
             downloadBtnText.textContent = '다운로드 완료';
             
-            // Direct file download
             const downloadUrl = `/api/file/${taskId}`;
             const iframe = document.createElement('iframe');
             iframe.style.display = 'none';
@@ -853,6 +1112,150 @@
           console.error(e);
         }
       }, 800);
+    }
+
+    // ==========================================
+    // 2. HWP to PDF Logic
+    // ==========================================
+    const dropZone = document.getElementById('dropZone');
+    const hwpFileInput = document.getElementById('hwpFileInput');
+    const hwpErrorAlert = document.getElementById('hwpErrorAlert');
+    const hwpResults = document.getElementById('hwpResults');
+    const fileList = document.getElementById('fileList');
+    const btnDownloadAll = document.getElementById('btnDownloadAll');
+    let convertedFileIds = [];
+
+    dropZone.addEventListener('click', () => hwpFileInput.click());
+
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('dragover');
+    });
+
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      if (e.dataTransfer.files.length > 0) {
+        handleHwpFiles(e.dataTransfer.files);
+      }
+    });
+
+    hwpFileInput.addEventListener('change', () => {
+      if (hwpFileInput.files.length > 0) {
+        handleHwpFiles(hwpFileInput.files);
+      }
+    });
+
+    function formatFileSize(bytes) {
+      if (!bytes) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return (bytes / Math.pow(k, i)).toFixed(1) + ' ' + sizes[i];
+    }
+
+    async function handleHwpFiles(files) {
+      hwpErrorAlert.style.display = 'none';
+      hwpResults.style.display = 'block';
+      fileList.innerHTML = '';
+      convertedFileIds = [];
+
+      const formData = new FormData();
+      for (let i = 0; i < files.length; i++) {
+        formData.append('files', files[i]);
+      }
+
+      const loadingItem = document.createElement('div');
+      loadingItem.className = 'file-item';
+      loadingItem.innerHTML = `
+        <div class="file-info">
+          <span class="spinner"></span>
+          <div>
+            <div class="file-name">문서 변환 중...</div>
+            <div class="file-size">${files.length}개 파일 변환 작업 진행 중</div>
+          </div>
+        </div>
+      `;
+      fileList.appendChild(loadingItem);
+
+      try {
+        const res = await fetch('/api/convert', {
+          method: 'POST',
+          body: formData
+        });
+        const data = await res.json();
+        fileList.innerHTML = '';
+
+        if (!res.ok) throw new Error(data.error || '변환 처리 중 오류 발생');
+
+        let successCount = 0;
+        data.results.forEach(item => {
+          const itemEl = document.createElement('div');
+          itemEl.className = 'file-item';
+
+          if (item.success) {
+            successCount++;
+            convertedFileIds.push(item.id);
+            itemEl.innerHTML = `
+              <div class="file-info">
+                <i class="fa-solid fa-file-pdf file-icon"></i>
+                <div>
+                  <div class="file-name">${item.pdf_name}</div>
+                  <div class="file-size">${formatFileSize(item.pdf_size)} • ${item.elapsed}초 소요</div>
+                </div>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <button class="btn-action btn-preview" onclick="openPreview('${item.id}', '${item.pdf_name}')">
+                  <i class="fa-solid fa-eye"></i> 미리보기
+                </button>
+                <a href="/api/hwp-download/${item.id}" class="btn-action btn-blue">
+                  <i class="fa-solid fa-download"></i> 다운로드
+                </a>
+              </div>
+            `;
+          } else {
+            itemEl.innerHTML = `
+              <div class="file-info">
+                <i class="fa-solid fa-triangle-exclamation" style="font-size: 24px; color: #f87171;"></i>
+                <div>
+                  <div class="file-name">${item.original_name}</div>
+                  <div class="file-size" style="color: #fca5a5;">${item.error || '변환 실패'}</div>
+                </div>
+              </div>
+            `;
+          }
+          fileList.appendChild(itemEl);
+        });
+
+        if (successCount > 1) {
+          btnDownloadAll.style.display = 'inline-flex';
+        } else {
+          btnDownloadAll.style.display = 'none';
+        }
+
+      } catch (err) {
+        fileList.innerHTML = '';
+        hwpErrorAlert.textContent = err.message;
+        hwpErrorAlert.style.display = 'block';
+      }
+    }
+
+    function downloadAllPdfs() {
+      if (convertedFileIds.length === 0) return;
+      window.location.href = `/api/download-all?ids=${convertedFileIds.join(',')}`;
+    }
+
+    function openPreview(fileId, fileName) {
+      document.getElementById('modalTitle').textContent = fileName;
+      document.getElementById('previewFrame').src = `/api/preview/${fileId}`;
+      document.getElementById('previewModal').style.display = 'flex';
+    }
+
+    function closeModal() {
+      document.getElementById('previewModal').style.display = 'none';
+      document.getElementById('previewFrame').src = '';
     }
   </script>
 </body>

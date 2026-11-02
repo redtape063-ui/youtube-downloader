@@ -5,8 +5,12 @@ import time
 import shutil
 import threading
 import subprocess
+import zipfile
+import io
+import json
 from pathlib import Path
 from flask import Flask, render_template, request, jsonify, send_file, after_this_request
+from werkzeug.utils import secure_filename
 
 # Ensure ffmpeg and ffprobe are in PATH
 try:
@@ -15,35 +19,46 @@ try:
         os.environ["PATH"] = ffmpeg_dir + os.pathsep + os.environ.get("PATH", "")
     import static_ffmpeg
     static_ffmpeg.add_paths()
-except Exception as e:
+except Exception:
     pass
 
 import yt_dlp
+from converter import convert_document, is_allowed_file
 
 app = Flask(__name__)
 
 # Base directories
 BASE_DIR = Path(__file__).resolve().parent
 DOWNLOADS_DIR = BASE_DIR / "downloads"
-DOWNLOADS_DIR.mkdir(exist_ok=True)
+UPLOAD_FOLDER = BASE_DIR / "uploads"
+CONVERTED_FOLDER = BASE_DIR / "converted"
 
-# In-memory task registry
+DOWNLOADS_DIR.mkdir(exist_ok=True)
+UPLOAD_FOLDER.mkdir(exist_ok=True)
+CONVERTED_FOLDER.mkdir(exist_ok=True)
+
+app.config['UPLOAD_FOLDER'] = str(UPLOAD_FOLDER)
+app.config['CONVERTED_FOLDER'] = str(CONVERTED_FOLDER)
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max file size
+
+# In-memory task registry for YouTube downloads
 tasks = {}
 tasks_lock = threading.Lock()
 
 def cleanup_old_files():
-    """Periodically clean up downloaded files older than 30 minutes."""
+    """Periodically clean up downloaded files and converted docs older than 30 minutes."""
     while True:
         try:
             time.sleep(300)
             now = time.time()
-            for item in DOWNLOADS_DIR.glob("**/*"):
-                if item.is_file() and now - item.stat().st_mtime > 1800:
-                    try:
-                        item.unlink()
-                    except Exception:
-                        pass
-            # remove empty directories
+            for directory in [DOWNLOADS_DIR, UPLOAD_FOLDER, CONVERTED_FOLDER]:
+                for item in directory.glob("**/*"):
+                    if item.is_file() and now - item.stat().st_mtime > 1800:
+                        try:
+                            item.unlink()
+                        except Exception:
+                            pass
+            # remove empty directories in downloads
             for item in DOWNLOADS_DIR.iterdir():
                 if item.is_dir() and not any(item.iterdir()):
                     try:
@@ -105,17 +120,12 @@ def get_media_codecs(filepath):
 
 
 def ensure_h264_aac_compatibility(filepath, task_id):
-    """
-    Ensure the downloaded MP4 video file uses universal H.264 (yuv420p) and AAC codecs
-    so it plays without any codec error on Windows Media Player, QuickTime, iOS, TV, etc.
-    """
+    """Ensure MP4 video uses standard H.264 & AAC for 100% universal compatibility."""
     filepath = Path(filepath)
     if not filepath.exists() or filepath.suffix.lower() != '.mp4':
         return filepath
 
     vcodec, acodec = get_media_codecs(filepath)
-    # H.264 codecs: h264, avc1
-    # AAC codecs: aac, mp4a
     needs_vtranscode = vcodec and vcodec not in ['h264', 'avc1']
     needs_atranscode = acodec and acodec not in ['aac', 'mp4a']
 
@@ -135,13 +145,11 @@ def ensure_h264_aac_compatibility(filepath, task_id):
 
     cmd = [ffmpeg_bin, "-y", "-i", str(filepath)]
     if needs_vtranscode:
-        # Transcode VP9 or AV1 to standard H.264 (yuv420p 8-bit for 100% device compatibility)
         cmd.extend(["-c:v", "libx264", "-preset", "veryfast", "-crf", "21", "-pix_fmt", "yuv420p"])
     else:
         cmd.extend(["-c:v", "copy"])
 
     if needs_atranscode:
-        # Transcode Opus or other audio to AAC
         cmd.extend(["-c:a", "aac", "-b:a", "192k"])
     else:
         cmd.extend(["-c:a", "copy"])
@@ -166,6 +174,9 @@ def index():
     return render_template('index.html')
 
 
+# ==========================================================
+# 1. 유튜브 다운로더 API
+# ==========================================================
 @app.route('/api/info', methods=['POST'])
 def get_video_info():
     data = request.get_json() or {}
@@ -180,7 +191,7 @@ def get_video_info():
         'extract_flat': False,
     }
 
-    # Check for cookie file (Render Secret Files / local)
+    # Check for cookie file
     for cpath in ["cookies.txt", "/etc/secrets/cookies.txt", BASE_DIR / "cookies.txt"]:
         if os.path.exists(cpath):
             ydl_opts['cookiefile'] = str(cpath)
@@ -282,7 +293,7 @@ def run_download_task(task_id, url, format_type, quality):
         'windowsfilenames': True,
     }
 
-    # Check for cookie file (Render Secret Files / local)
+    # Check for cookie file
     for cpath in ["cookies.txt", "/etc/secrets/cookies.txt", BASE_DIR / "cookies.txt"]:
         if os.path.exists(cpath):
             ydl_opts['cookiefile'] = str(cpath)
@@ -298,8 +309,6 @@ def run_download_task(task_id, url, format_type, quality):
             }],
         })
     else:
-        # Strictly prioritize H.264 (avc1) and AAC (mp4a) for universal compatibility
-        # This prevents yt-dlp from picking AV1 (av01) or VP9 which cause "codec unsupported" errors on Windows Media Player & QuickTime
         h = quality if (quality and str(quality).isdigit()) else 1080
         ydl_opts['format'] = (
             f"bestvideo[height<={h}][vcodec^=avc1]+bestaudio[acodec^=mp4a]/"
@@ -309,7 +318,6 @@ def run_download_task(task_id, url, format_type, quality):
             f"best[height<={h}]/best"
         )
         ydl_opts['merge_output_format'] = 'mp4'
-        # Ensure that if audio stream was Opus, merger transcodes it to standard AAC
         ydl_opts['postprocessor_args'] = {
             'merger': ['-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k']
         }
@@ -318,14 +326,12 @@ def run_download_task(task_id, url, format_type, quality):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
 
-        # Locate downloaded file
         downloaded_files = [f for f in task_dir.iterdir() if f.is_file() and not f.name.endswith('.part')]
         if not downloaded_files:
             raise Exception("다운로드된 파일을 찾을 수 없습니다.")
 
         final_file = downloaded_files[0]
 
-        # Normalize video/audio codecs if format is MP4 video
         if format_type != 'audio' and final_file.suffix.lower() == '.mp4':
             final_file = ensure_h264_aac_compatibility(final_file, task_id)
 
@@ -349,7 +355,7 @@ def run_download_task(task_id, url, format_type, quality):
 def start_download():
     data = request.get_json() or {}
     url = data.get('url', '').strip()
-    format_type = data.get('format', 'video')  # 'video' or 'audio'
+    format_type = data.get('format', 'video')
     quality = data.get('quality', 1080)
 
     if not url:
@@ -407,7 +413,169 @@ def download_file(task_id):
     )
 
 
+# ==========================================================
+# 2. 한글(HWP / HWPX) -> PDF 변환기 API
+# ==========================================================
+def get_meta_path(file_id):
+    return os.path.join(app.config['CONVERTED_FOLDER'], f"{file_id}.json")
+
+def save_record(file_id, record):
+    meta_path = get_meta_path(file_id)
+    try:
+        with open(meta_path, 'w', encoding='utf-8') as f:
+            json.dump(record, f, ensure_ascii=False)
+    except Exception as e:
+        app.logger.error(f"Error saving record: {e}")
+
+def get_record(file_id):
+    meta_path = get_meta_path(file_id)
+    if os.path.exists(meta_path):
+        try:
+            with open(meta_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            pass
+    pdf_path = os.path.join(app.config['CONVERTED_FOLDER'], f"{file_id}.pdf")
+    if os.path.exists(pdf_path):
+        return {
+            'id': file_id,
+            'pdf_path': pdf_path,
+            'display_name': 'document.pdf'
+        }
+    return None
+
+
+@app.route('/api/convert', methods=['POST'])
+def convert():
+    if 'files' not in request.files:
+        return jsonify({'error': '업로드할 파일이 없습니다.'}), 400
+
+    files = request.files.getlist('files')
+    if not files or files[0].filename == '':
+        return jsonify({'error': '선택된 파일이 없습니다.'}), 400
+
+    results = []
+    for file in files:
+        original_name = file.filename
+        if not is_allowed_file(original_name):
+            results.append({
+                'original_name': original_name,
+                'success': False,
+                'error': '지원하지 않는 확장자입니다. (.hwp, .hwpx 파일만 가능)'
+            })
+            continue
+
+        file_id = str(uuid.uuid4())
+        ext = os.path.splitext(original_name)[1].lower()
+        saved_name = f"{file_id}{ext}"
+        input_path = os.path.join(app.config['UPLOAD_FOLDER'], saved_name)
+        
+        pdf_name = f"{os.path.splitext(original_name)[0]}.pdf"
+        output_pdf_filename = f"{file_id}.pdf"
+        output_pdf_path = os.path.join(app.config['CONVERTED_FOLDER'], output_pdf_filename)
+
+        file.save(input_path)
+        original_size = os.path.getsize(input_path)
+
+        success, elapsed, error = convert_document(input_path, output_pdf_path)
+
+        if success and os.path.exists(output_pdf_path):
+            pdf_size = os.path.getsize(output_pdf_path)
+            record = {
+                'id': file_id,
+                'original_name': original_name,
+                'display_name': pdf_name,
+                'original_size': original_size,
+                'pdf_size': pdf_size,
+                'elapsed': elapsed,
+                'pdf_path': output_pdf_path
+            }
+            save_record(file_id, record)
+            results.append({
+                'id': file_id,
+                'original_name': original_name,
+                'pdf_name': pdf_name,
+                'original_size': original_size,
+                'pdf_size': pdf_size,
+                'elapsed': elapsed,
+                'success': True
+            })
+        else:
+            results.append({
+                'original_name': original_name,
+                'success': False,
+                'elapsed': elapsed,
+                'error': error or '변환 실패'
+            })
+
+    return jsonify({'results': results})
+
+
+@app.route('/api/preview/<file_id>')
+def preview_pdf(file_id):
+    record = get_record(file_id)
+    if not record or not os.path.exists(record['pdf_path']):
+        return "파일을 찾을 수 없습니다.", 404
+    return send_file(
+        record['pdf_path'],
+        mimetype='application/pdf',
+        as_attachment=False,
+        download_name=record['display_name']
+    )
+
+
+@app.route('/api/hwp-download/<file_id>')
+def download_pdf(file_id):
+    record = get_record(file_id)
+    if not record or not os.path.exists(record['pdf_path']):
+        return "파일을 찾을 수 없습니다.", 404
+    return send_file(
+        record['pdf_path'],
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name=record['display_name']
+    )
+
+
+@app.route('/api/download-all', methods=['GET'])
+def download_all_pdfs():
+    ids_param = request.args.get('ids', '')
+    ids = [i.strip() for i in ids_param.split(',') if i.strip()]
+    
+    if not ids:
+        return "다운로드할 파일 ID가 없습니다.", 400
+
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        for file_id in ids:
+            record = get_record(file_id)
+            if record and os.path.exists(record['pdf_path']):
+                zip_file.write(record['pdf_path'], arcname=record['display_name'])
+
+    zip_buffer.seek(0)
+    return send_file(
+        zip_buffer,
+        mimetype='application/zip',
+        as_attachment=True,
+        download_name='converted_pdfs.zip'
+    )
+
+
+@app.route('/api/sample')
+def get_sample_hwp():
+    sample_path = BASE_DIR / '한글_HWPX_샘플문서.hwpx'
+    if not sample_path.exists():
+        from create_sample import create_sample_hwpx
+        create_sample_hwpx(str(sample_path))
+    return send_file(
+        str(sample_path),
+        as_attachment=True,
+        download_name='한글_HWPX_샘플문서.hwpx',
+        mimetype='application/hwp+zip'
+    )
+
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5050))
-    print(f"Starting YouTube Downloader on http://127.0.0.1:{port}")
+    print(f"Starting Integrated Toolbox on http://127.0.0.1:{port}")
     app.run(host='0.0.0.0', port=port, debug=False)
