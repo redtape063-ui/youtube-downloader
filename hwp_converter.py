@@ -25,6 +25,9 @@ FONT_PATH = FINAL_FONT_PATH
 
 def link_callback(uri, rel):
     """Resolve font and image resources safely for xhtml2pdf"""
+    if 'AppleGothic' in uri or uri.endswith('.ttf'):
+        return FONT_PATH
+
     if uri.startswith('file://'):
         path = uri[7:]
     else:
@@ -47,9 +50,10 @@ def ensure_font_registered():
             pdfmetrics.registerFont(TTFont(FONT_NAME, FONT_PATH))
             FONT_REGISTERED = True
 
+
 def convert_hwp_via_html(hwp_file, output_pdf_file):
     """
-    Convert .hwp to PDF using pure python pyhwp API + xhtml2pdf
+    Convert .hwp to PDF using pure python pyhwp API + xhtml2pdf with layout sanitization
     """
     from hwp5.xmlmodel import Hwp5File
     from hwp5.hwp5html import HTMLTransform
@@ -72,8 +76,33 @@ def convert_hwp_via_html(hwp_file, output_pdf_file):
         with open(index_html, 'r', encoding='utf-8', errors='replace') as f:
             html = f.read()
 
+        # Read external styles.css if present and inline it
+        css_file = os.path.join(dest_dir, "styles.css")
+        external_css = ""
+        if os.path.exists(css_file):
+            with open(css_file, 'r', encoding='utf-8', errors='replace') as f:
+                external_css = f.read()
+            # Remove font-family overrides from styles.css so our Korean font applies cleanly
+            external_css = re.sub(r'font-family:[^;]+;', '', external_css)
+
+        # 1. Sanitize outer wrapper divs that break ReportLab flowable page-splitting:
+        # e.g., <div class="Section Section-0 Paper">, <div class="HeaderPageFooter">, <div class="Page">
+        cleaned = re.sub(r'<div\s+class=[\"\'](Section[^\"\']*|HeaderPageFooter|Page)[\"\']>', '', html)
+        # Strip TableControl span wrappers that force indivisible BlockBox
+        cleaned = re.sub(r'</?span[^>]*TableControl[^>]*>', '', cleaned)
+
+        # 2. Neutralize fixed width/positions that cause LayoutError
+        cleaned = re.sub(r'width:\s*210mm;?', 'width: 100%;', cleaned)
+        cleaned = re.sub(r'position:\s*relative;?', '', cleaned)
+        cleaned = re.sub(r'display:\s*inline-block;?', 'display: block;', cleaned)
+
+        # 3. Add clean page styles with proper Korean font support
         korean_style = f"""
         <style>
+        @page {{
+            size: A4 portrait;
+            margin: 15mm 15mm 15mm 15mm;
+        }}
         @font-face {{
             font-family: '{FONT_NAME}';
             src: url('{FONT_PATH}');
@@ -82,61 +111,82 @@ def convert_hwp_via_html(hwp_file, output_pdf_file):
             font-family: '{FONT_NAME}', sans-serif !important;
         }}
         table {{
+            width: 100% !important;
+            max-width: 100% !important;
             border-collapse: collapse;
-            width: 100%;
         }}
         td, th {{
             border: 0.5pt solid #718096;
-            padding: 4px;
+            padding: 3px;
+            word-break: break-all;
         }}
         img {{
             max-width: 100%;
+            height: auto;
         }}
+        .HeaderPageFooter, .Page, .Section {{
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }}
+        {external_css}
         </style>
         """
         
-        if '<head>' in html:
-            html = html.replace('<head>', f'<head>{korean_style}')
+        if '<head>' in cleaned:
+            cleaned = cleaned.replace('<head>', f'<head>{korean_style}')
         else:
-            html = f"{korean_style}\n{html}"
+            cleaned = f"{korean_style}\n{cleaned}"
 
         with open(output_pdf_file, 'wb') as f:
-            pisa_status = pisa.CreatePDF(html, dest=f, link_callback=link_callback)
+            pisa_status = pisa.CreatePDF(cleaned, dest=f, link_callback=link_callback)
 
         if pisa_status.err:
             raise RuntimeError("xhtml2pdf conversion had errors")
 
         return True
 
+
 def convert_hwp_via_text_fallback(hwp_file, output_pdf_file):
     """
-    Fallback converter: extract text via pure python pyhwp TextTransform and generate clean PDF using ReportLab
+    Fallback converter: extract text and generate clean PDF using ReportLab
     """
     ensure_font_registered()
     from hwp5.xmlmodel import Hwp5File
     from hwp5.hwp5txt import TextTransform
 
-    text_buf = io.StringIO()
-    text_transform = TextTransform()
-    with closing(Hwp5File(hwp_file)) as hwp5file:
-        text_transform.transform_hwp5_to_text(hwp5file, text_buf)
+    text = ""
+    try:
+        # In Python 3, lxml writes bytes, so BytesIO is required
+        text_buf = io.BytesIO()
+        text_transform = TextTransform()
+        with closing(Hwp5File(hwp_file)) as hwp5file:
+            text_transform.transform_hwp5_to_text(hwp5file, text_buf)
+        text = text_buf.getvalue().decode('utf-8', errors='replace')
+    except Exception as e:
+        print(f"TextTransform error: {e}")
 
-    text = text_buf.getvalue()
     if not text.strip():
-        # Fallback to olefile extraction if TextTransform is empty
+        # Fallback to olefile extraction if TextTransform is empty or failed
         import olefile
         import zlib
-        if olefile.isOleFile(hwp_file):
-            with olefile.OleFileIO(hwp_file) as ole:
-                for entry in ole.listdir():
-                    if entry[0] == 'BodyText':
-                        stream = ole.openstream(entry)
-                        data = stream.read()
-                        try:
-                            data = zlib.decompress(data, -15)
-                        except:
-                            pass
-                        text += data.decode('utf-16le', errors='ignore') + "\n"
+        try:
+            if olefile.isOleFile(hwp_file):
+                with olefile.OleFileIO(hwp_file) as ole:
+                    for entry in ole.listdir():
+                        if entry and entry[0] == 'BodyText':
+                            stream = ole.openstream(entry)
+                            data = stream.read()
+                            try:
+                                data = zlib.decompress(data, -15)
+                            except Exception:
+                                pass
+                            text += data.decode('utf-16le', errors='ignore') + "\n"
+        except Exception as ole_err:
+            print(f"olefile BodyText fallback error: {ole_err}")
+
+    if not text.strip():
+        raise RuntimeError("문서에서 텍스트 내용을 추출할 수 없습니다.")
 
     doc = SimpleDocTemplate(
         output_pdf_file,
