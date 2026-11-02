@@ -178,12 +178,13 @@ def get_video_info():
         'no_warnings': True,
         'skip_download': True,
         'extract_flat': False,
-        'extractor_args': {
-            'youtube': {
-                'player_client': ['android', 'ios', 'mweb', 'web']
-            }
-        }
     }
+
+    # Check for cookie file (Render Secret Files / local)
+    for cpath in ["cookies.txt", "/etc/secrets/cookies.txt", BASE_DIR / "cookies.txt"]:
+        if os.path.exists(cpath):
+            ydl_opts['cookiefile'] = str(cpath)
+            break
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -279,12 +280,13 @@ def run_download_task(task_id, url, format_type, quality):
         'quiet': True,
         'no_warnings': True,
         'windowsfilenames': True,
-        'extractor_args': {
-            'youtube': {
-                'player_client': ['android', 'ios', 'mweb', 'web']
-            }
-        }
     }
+
+    # Check for cookie file (Render Secret Files / local)
+    for cpath in ["cookies.txt", "/etc/secrets/cookies.txt", BASE_DIR / "cookies.txt"]:
+        if os.path.exists(cpath):
+            ydl_opts['cookiefile'] = str(cpath)
+            break
 
     if format_type == 'audio':
         ydl_opts.update({
